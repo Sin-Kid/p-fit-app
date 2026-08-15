@@ -25,6 +25,7 @@ export default function StepCounterScreen() {
     isTracking,
     refresh,
     requestPermission,
+    requestBackgroundExemption,
   } = useStepCounter();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -77,7 +78,7 @@ export default function StepCounterScreen() {
           </View>
           <Text style={styles.stateTitle}>Permission Required</Text>
           <Text style={styles.stateDescription}>
-            Physical Activity permission is required to count your steps using your phone's hardware sensor in foreground and background.
+            Physical Activity permission is required to count your steps in foreground and background.
           </Text>
 
           <TouchableOpacity
@@ -85,7 +86,7 @@ export default function StepCounterScreen() {
             onPress={requestPermission}
             activeOpacity={0.85}
           >
-            <Text style={styles.primaryButtonText}>Grant Permission</Text>
+            <Text style={styles.primaryButtonText}>Grant Activity Permission</Text>
           </TouchableOpacity>
 
           {Platform.OS === 'android' && (
@@ -94,7 +95,7 @@ export default function StepCounterScreen() {
               onPress={() => Linking.openSettings()}
               activeOpacity={0.7}
             >
-              <Text style={styles.secondaryButtonText}>Open Device Settings</Text>
+              <Text style={styles.secondaryButtonText}>Open App Settings</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -118,7 +119,7 @@ export default function StepCounterScreen() {
           <View style={styles.statusPill}>
             <View style={[styles.statusDot, isTracking ? styles.statusDotActive : styles.statusDotIdle]} />
             <Text style={styles.statusPillText}>
-              {isTracking ? 'Hardware Sensor Live' : 'Ready'}
+              {isTracking ? 'Active & Counting' : 'Ready'}
             </Text>
           </View>
         </View>
@@ -191,12 +192,24 @@ export default function StepCounterScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Background Status Card */}
+        {/* Background Status & Optimization Button */}
         <View style={styles.infoBanner}>
-          <Text style={styles.infoTitle}>⚡ Background Tracking Active</Text>
+          <View style={styles.infoBannerHeader}>
+            <Text style={styles.infoTitle}>⚡ Background Tracking Active</Text>
+          </View>
           <Text style={styles.infoText}>
-            Steps taken while the app is minimized or phone is locked are recorded by your device's hardware chip and reconciled every ~15 mins or when opening the app.
+            On Android, disable battery optimizations so the OS does not freeze step tracking when your phone is locked in your pocket.
           </Text>
+
+          {Platform.OS === 'android' && (
+            <TouchableOpacity
+              style={styles.optimizeButton}
+              onPress={requestBackgroundExemption}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.optimizeButtonText}>🔋 Allow Unrestricted Background Battery</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -391,17 +404,34 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
   },
+  infoBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   infoTitle: {
     fontSize: 12,
     fontWeight: '800',
     color: '#1D4ED8',
-    marginBottom: 4,
   },
   infoText: {
     fontSize: 11,
     color: '#3B82F6',
     lineHeight: 16,
     fontWeight: '500',
+    marginBottom: 12,
+  },
+  optimizeButton: {
+    backgroundColor: '#2563EB',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  optimizeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
   },
   stateCenterContainer: {
     flex: 1,

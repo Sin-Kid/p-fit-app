@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Platform, PermissionsAndroid, AppState } from 'react-native';
-import { Pedometer } from 'expo-sensors';
+import { Platform, PermissionsAndroid, AppState, Linking } from 'react-native';
+import { Pedometer, Accelerometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 
@@ -22,51 +22,35 @@ const getStartOfToday = () => {
 };
 
 /**
- * Custom Hook: useStepCounter
+ * Enhanced useStepCounter Hook
  * 
- * Provides robust, hardware-backed step counting with zero double-counting
- * and complete resilience across app restarts, background execution, and day rollovers.
- * 
- * ARCHITECTURAL FLOW & RECONCILIATION EXPLANATION:
- * ------------------------------------------------
- * 1. Hardware Anchor (persistedTotal):
- *    Android hardware pedometer sensor (TYPE_STEP_COUNTER) runs at the hardware/OS level.
- *    Pedometer.getStepCountAsync(start, end) queries the hardware buffer for verified step
- *    intervals. This is our single source of truth.
- * 
- * 2. Live Foreground Delta (liveDelta):
- *    Pedometer.watchStepCount(callback) emits an incremental session counter starting from 0
- *    for the duration of the foreground session. We display (persistedTotal + liveDelta)
- *    to give immediate 60fps responsiveness to the user.
- * 
- * 3. Background Transition (AppState -> background):
- *    When leaving the foreground, we unsubscribe from watchStepCount, fold liveDelta into
- *    persistedTotal, write to AsyncStorage, and update lastTimestamp = Date.now().
- * 
- * 4. Foreground Resume (AppState -> active):
- *    When the user returns, we read AsyncStorage (in case our BackgroundFetch task updated
- *    steps while the app was killed), query getStepCountAsync(lastTimestamp, now) to recover
- *    any steps taken in the gap, save the new total, and restart a clean watchStepCount session.
- * 
- * 5. Midnight Rollover (Day boundary):
- *    If savedDate !== todayDate, persistedTotal resets to steps logged since 00:00 today.
+ * Features:
+ * 1. Dual Permission Engine: Pedometer.requestPermissionsAsync() + PermissionsAndroid.request()
+ * 2. Instant Responsive Live Tracking: Combines Pedometer.watchStepCount with an Accelerometer
+ *    motion assist peak detector to eliminate Android's 10-15 step hardware batching lag.
+ * 3. Authoritative Background Reconciliation: Reconciles exact steps on resume via Pedometer.getStepCountAsync().
+ * 4. Background Battery Optimization Exemption helper.
  */
 export function useStepCounter() {
-  const [isAvailable, setIsAvailable] = useState(null);
+  const [isAvailable, setIsAvailable] = useState(true);
   const [permissionGranted, setPermissionGranted] = useState(null);
   const [persistedTotal, setPersistedTotal] = useState(0);
   const [liveDelta, setLiveDelta] = useState(0);
   const [error, setError] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
 
-  // Mutable refs to prevent stale closures in event listeners & AppState transitions
-  const subscriptionRef = useRef(null);
+  const pedometerSubRef = useRef(null);
+  const accelSubRef = useRef(null);
   const liveDeltaRef = useRef(0);
   const persistedTotalRef = useRef(0);
   const lastTimestampRef = useRef(Date.now());
   const appStateRef = useRef(AppState.currentState);
 
-  // Keep refs synchronized with React state
+  // Peak detector refs for immediate motion assistance
+  const lastMagnitudeRef = useRef(1.0);
+  const lastStepTimeRef = useRef(0);
+  const motionStepsRef = useRef(0);
+
   useEffect(() => {
     liveDeltaRef.current = liveDelta;
   }, [liveDelta]);
@@ -76,94 +60,149 @@ export function useStepCounter() {
   }, [persistedTotal]);
 
   /**
-   * Request Runtime Permissions:
-   * Android 10+ (API 29+) requires runtime ACTIVITY_RECOGNITION permission.
+   * Request Runtime Permissions
    */
-  const requestAndroidPermission = useCallback(async () => {
+  const requestPermission = useCallback(async () => {
     try {
-      if (Platform.OS === 'android') {
-        // Check Android SDK version
-        if (Platform.Version >= 29) {
+      let isGranted = false;
+
+      // 1. Request via Expo Sensors API
+      try {
+        const expoPerm = await Pedometer.requestPermissionsAsync();
+        if (expoPerm.status === 'granted') {
+          isGranted = true;
+        }
+      } catch (e) {
+        console.log('[useStepCounter] Expo permission request fallback:', e);
+      }
+
+      // 2. Explicit Android Native Runtime Request
+      if (Platform.OS === 'android' && Platform.Version >= 29) {
+        try {
           const granted = await PermissionsAndroid.request(
             PermissionsAndroid.PERMISSIONS.ACTIVITY_RECOGNITION,
             {
               title: 'Activity Recognition Permission',
-              message: 'This app needs physical activity permission to count your daily steps accurately in background and foreground.',
+              message: 'P-Fit needs Physical Activity access to count your steps in the foreground and background.',
               buttonPositive: 'Allow',
               buttonNegative: 'Deny',
             }
           );
-          const isGranted = granted === PermissionsAndroid.RESULTS.GRANTED;
-          setPermissionGranted(isGranted);
-          return isGranted;
-        } else {
-          // Android < 29 granted at install time
-          setPermissionGranted(true);
-          return true;
+          if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            isGranted = true;
+          }
+        } catch (e) {
+          console.warn('[useStepCounter] Android native permission request:', e);
         }
-      } else {
-        // iOS permissions via expo-sensors
-        const { status } = await Pedometer.requestPermissionsAsync();
-        const isGranted = status === 'granted';
-        setPermissionGranted(isGranted);
-        return isGranted;
+      } else if (Platform.OS === 'android') {
+        isGranted = true;
       }
+
+      setPermissionGranted(isGranted);
+      return isGranted;
     } catch (err) {
-      console.warn('[useStepCounter] Permission request error:', err);
-      setError('Failed to request activity permission: ' + err.message);
+      console.warn('[useStepCounter] Permission request failed:', err);
+      setError('Permission request failed: ' + err.message);
       setPermissionGranted(false);
       return false;
     }
   }, []);
 
   /**
-   * Starts a fresh Pedometer.watchStepCount session
+   * Open Android Battery Optimization / Settings to allow background tracking
    */
-  const startLiveWatcher = useCallback(() => {
-    // Unsubscribe previous session if any
-    if (subscriptionRef.current) {
-      subscriptionRef.current.remove();
-      subscriptionRef.current = null;
-    }
-
-    setLiveDelta(0);
-    liveDeltaRef.current = 0;
-
+  const requestBackgroundExemption = useCallback(async () => {
     try {
-      subscriptionRef.current = Pedometer.watchStepCount((result) => {
-        if (result && typeof result.steps === 'number') {
-          setLiveDelta(result.steps);
-          liveDeltaRef.current = result.steps;
-        }
-      });
-      setIsTracking(true);
+      if (Platform.OS === 'android') {
+        await Linking.openSettings();
+      }
     } catch (err) {
-      console.warn('[useStepCounter] watchStepCount failed:', err);
-      setIsTracking(false);
+      console.warn('[useStepCounter] Open settings failed:', err);
     }
   }, []);
 
   /**
-   * Stops the live watcher
+   * Starts Foreground Live Tracking (Hardware Pedometer + Responsive Motion Assist)
+   */
+  const startLiveWatcher = useCallback(() => {
+    // Clean up existing subscriptions
+    if (pedometerSubRef.current) {
+      pedometerSubRef.current.remove();
+      pedometerSubRef.current = null;
+    }
+    if (accelSubRef.current) {
+      accelSubRef.current.remove();
+      accelSubRef.current = null;
+    }
+
+    setLiveDelta(0);
+    liveDeltaRef.current = 0;
+    motionStepsRef.current = 0;
+
+    // 1. Hardware Pedometer Watcher
+    try {
+      pedometerSubRef.current = Pedometer.watchStepCount((result) => {
+        if (result && typeof result.steps === 'number') {
+          // Hardware step counter emitted verified steps: use hardware as authoritative
+          const steps = result.steps;
+          liveDeltaRef.current = steps;
+          setLiveDelta(steps);
+        }
+      });
+      setIsTracking(true);
+    } catch (err) {
+      console.log('[useStepCounter] watchStepCount fallback to motion detector:', err);
+    }
+
+    // 2. Accelerometer Motion Assist: Provides instant 1-step responsiveness
+    try {
+      Accelerometer.setUpdateInterval(50); // 20Hz update rate
+      accelSubRef.current = Accelerometer.addListener(({ x, y, z }) => {
+        const magnitude = Math.sqrt(x * x + y * y + z * z);
+        const delta = Math.abs(magnitude - lastMagnitudeRef.current);
+        const now = Date.now();
+
+        // Step peak detection threshold: delta > 0.45g and min 320ms between steps
+        if (delta > 0.45 && now - lastStepTimeRef.current > 320) {
+          lastStepTimeRef.current = now;
+          motionStepsRef.current += 1;
+
+          // If hardware pedometer hasn't emitted or is buffering, show instant motion steps
+          if (motionStepsRef.current > liveDeltaRef.current) {
+            liveDeltaRef.current = motionStepsRef.current;
+            setLiveDelta(motionStepsRef.current);
+          }
+        }
+        lastMagnitudeRef.current = magnitude;
+      });
+    } catch (e) {
+      console.log('[useStepCounter] Accelerometer assist not available:', e);
+    }
+  }, []);
+
+  /**
+   * Stops Live Watchers
    */
   const stopLiveWatcher = useCallback(() => {
-    if (subscriptionRef.current) {
-      subscriptionRef.current.remove();
-      subscriptionRef.current = null;
+    if (pedometerSubRef.current) {
+      pedometerSubRef.current.remove();
+      pedometerSubRef.current = null;
+    }
+    if (accelSubRef.current) {
+      accelSubRef.current.remove();
+      accelSubRef.current = null;
     }
     setIsTracking(false);
   }, []);
 
   /**
-   * Authoritative Step Reconciliation Engine
-   * Queries hardware sensor buffer and synchronizes AsyncStorage
+   * Reconcile Steps with Hardware Storage Baseline
    */
   const reconcileSteps = useCallback(async (forcedFullDay = false) => {
     try {
       const now = new Date();
       const todayStr = getTodayDateString();
 
-      // Read current state from storage
       const [savedDate, savedStepsStr, savedTimestampStr] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.SAVED_DATE),
         AsyncStorage.getItem(STORAGE_KEYS.PERSISTED_STEPS),
@@ -175,39 +214,32 @@ export function useStepCounter() {
 
       let newPersistedTotal = storedSteps;
 
-      // Check for midnight / day rollover
+      // 1. Midnight day rollover
       if (savedDate !== todayStr || forcedFullDay) {
-        // New calendar day: Query complete range from 00:00 today to right now
         const startOfToday = getStartOfToday();
         try {
           const stepResult = await Pedometer.getStepCountAsync(startOfToday, now);
           newPersistedTotal = stepResult && typeof stepResult.steps === 'number' ? stepResult.steps : 0;
         } catch (queryErr) {
-          console.warn('[useStepCounter] getStepCountAsync for today failed:', queryErr);
           newPersistedTotal = 0;
         }
 
-        // Save new day baseline
         await Promise.all([
           AsyncStorage.setItem(STORAGE_KEYS.SAVED_DATE, todayStr),
           AsyncStorage.setItem(STORAGE_KEYS.PERSISTED_STEPS, newPersistedTotal.toString()),
           AsyncStorage.setItem(STORAGE_KEYS.LAST_TIMESTAMP, now.getTime().toString()),
         ]);
       } else {
-        // Same calendar day: Reconcile gap since last active timestamp
+        // 2. Same-day gap recovery
         const gapStart = new Date(Math.max(getStartOfToday().getTime(), lastTimestamp));
         
-        // Only query if gap is at least 1 second
         if (now.getTime() - gapStart.getTime() > 1000) {
           try {
             const stepResult = await Pedometer.getStepCountAsync(gapStart, now);
             const gapSteps = stepResult && typeof stepResult.steps === 'number' ? stepResult.steps : 0;
-            
-            // Increment persisted total with newly recovered gap steps
             newPersistedTotal = storedSteps + gapSteps;
           } catch (queryErr) {
-            console.warn('[useStepCounter] getStepCountAsync gap query failed:', queryErr);
-            // Fallback: keep existing storedSteps
+            // Keep existing stored steps
           }
         }
 
@@ -217,12 +249,10 @@ export function useStepCounter() {
         ]);
       }
 
-      // Update state and refs
       setPersistedTotal(newPersistedTotal);
       persistedTotalRef.current = newPersistedTotal;
       lastTimestampRef.current = now.getTime();
 
-      // Reset live delta and restart clean watch session
       startLiveWatcher();
       return newPersistedTotal;
     } catch (err) {
@@ -233,32 +263,24 @@ export function useStepCounter() {
   }, [startLiveWatcher]);
 
   /**
-   * Initial Setup & Availability Check
+   * Initial Setup
    */
   useEffect(() => {
     let isMounted = true;
 
     async function init() {
       try {
-        // 1. Check hardware availability
         const available = await Pedometer.isAvailableAsync();
         if (!isMounted) return;
-        setIsAvailable(available);
+        setIsAvailable(available !== false);
 
-        if (!available) {
-          setError('Hardware step counter sensor is not available on this device.');
-          return;
-        }
-
-        // 2. Request permission
-        const granted = await requestAndroidPermission();
+        // Request runtime permission
+        const granted = await requestPermission();
         if (!isMounted || !granted) return;
 
-        // 3. Initial reconciliation
         await reconcileSteps();
       } catch (err) {
         if (!isMounted) return;
-        console.warn('[useStepCounter] Init failed:', err);
         setError(err.message);
       }
     }
@@ -269,10 +291,10 @@ export function useStepCounter() {
       isMounted = false;
       stopLiveWatcher();
     };
-  }, [requestAndroidPermission, reconcileSteps, stopLiveWatcher]);
+  }, [requestPermission, reconcileSteps, stopLiveWatcher]);
 
   /**
-   * AppState Listener: Handles Background / Foreground Transitions
+   * AppState Transitions (Foreground / Background)
    */
   useEffect(() => {
     const handleAppStateChange = async (nextAppState) => {
@@ -280,11 +302,8 @@ export function useStepCounter() {
       appStateRef.current = nextAppState;
 
       if (prevAppState.match(/active/) && nextAppState.match(/inactive|background/)) {
-        // --- TRANSITION TO BACKGROUND ---
-        // 1. Stop live subscription
         stopLiveWatcher();
 
-        // 2. Fold liveDelta into persistedTotal and save to AsyncStorage
         const currentLive = liveDeltaRef.current;
         const currentPersisted = persistedTotalRef.current;
         const updatedTotal = currentPersisted + currentLive;
@@ -303,31 +322,22 @@ export function useStepCounter() {
             AsyncStorage.setItem(STORAGE_KEYS.SAVED_DATE, getTodayDateString()),
           ]);
         } catch (storageErr) {
-          console.warn('[useStepCounter] Failed to persist on background:', storageErr);
+          console.warn('[useStepCounter] Storage persist failed:', storageErr);
         }
       } else if (prevAppState.match(/inactive|background/) && nextAppState === 'active') {
-        // --- TRANSITION TO FOREGROUND ---
-        // Recover gap steps and resume live watching
         await reconcileSteps();
       }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-
-    return () => {
-      subscription.remove();
-    };
+    return () => subscription.remove();
   }, [reconcileSteps, stopLiveWatcher]);
 
-  /**
-   * Manual Refresh Function
-   */
   const refresh = useCallback(async () => {
     setError(null);
     return await reconcileSteps();
   }, [reconcileSteps]);
 
-  // Total steps displayed = Authoritative Hardware Total + Current Live Session Delta
   const totalSteps = persistedTotal + liveDelta;
 
   return {
@@ -339,6 +349,7 @@ export function useStepCounter() {
     error,
     isTracking,
     refresh,
-    requestPermission: requestAndroidPermission,
+    requestPermission,
+    requestBackgroundExemption,
   };
 }
