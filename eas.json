@@ -5,6 +5,7 @@
   },
   "build": {
     "development": {
+      "baseDirectory": "mobile",
       "developmentClient": true,
       "distribution": "internal",
       "android": {
@@ -12,12 +13,14 @@
       }
     },
     "preview": {
+      "baseDirectory": "mobile",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
+      "baseDirectory": "mobile",
       "android": {
         "buildType": "app-bundle"
       }
