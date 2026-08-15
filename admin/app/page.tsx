@@ -145,106 +145,131 @@ export default function PFitApp() {
 
     try {
       // 1. Ensure user profile exists in Supabase profiles table
-      await supabase.from('profiles').upsert({
-        id: user.id,
-        full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'P-fit User',
-        email: user.email,
-        daily_step_goal: 10000,
-        daily_water_goal_ml: 2500,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      try {
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'P-fit User',
+          email: user.email,
+          daily_step_goal: 10000,
+          daily_water_goal_ml: 2500,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+      } catch (upsertErr) {}
 
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       const todayIso = todayStart.toISOString();
 
-      // 2. Fetch User Profile Goals
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      if (prof) {
-        setUserGoals({
-          dailySteps: prof.daily_step_goal || 10000,
-          dailyWaterL: (prof.daily_water_goal_ml || 2500) / 1000,
-          dailyCalories: 2400,
-          weeklyWorkouts: 5
-        });
-      }
+      // 2. Fetch User Profile Goals (using maybeSingle)
+      try {
+        const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+        if (prof) {
+          setUserGoals({
+            dailySteps: prof.daily_step_goal || 10000,
+            dailyWaterL: (prof.daily_water_goal_ml || 2500) / 1000,
+            dailyCalories: 2400,
+            weeklyWorkouts: 5
+          });
+        }
+      } catch (profErr) {}
 
       // 3. Fetch Step Logs for today
-      const { data: stepData } = await supabase.from('step_logs')
-        .select('steps')
-        .eq('user_id', user.id)
-        .gte('created_at', todayIso);
+      try {
+        const { data: stepData } = await supabase.from('step_logs')
+          .select('steps')
+          .eq('user_id', user.id)
+          .gte('created_at', todayIso);
 
-      const totalTodaySteps = stepData?.reduce((acc, curr) => acc + (curr.steps || 0), 0) || 0;
-      setSteps(totalTodaySteps);
+        const totalTodaySteps = stepData?.reduce((acc, curr) => acc + (curr.steps || 0), 0) || 0;
+        setSteps(totalTodaySteps);
+      } catch (stepErr) {
+        setSteps(0);
+      }
 
       // 4. Fetch Water Logs for today
-      const { data: waterData } = await supabase.from('water_logs')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', todayIso)
-        .order('created_at', { ascending: false });
+      try {
+        const { data: waterData } = await supabase.from('water_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('created_at', todayIso)
+          .order('created_at', { ascending: false });
 
-      if (waterData && waterData.length > 0) {
-        const totalMl = waterData.reduce((acc, curr) => acc + (curr.amount_ml || 0), 0);
-        setWaterL(parseFloat((totalMl / 1000).toFixed(2)));
-        setWaterLogs(waterData.map(w => ({
-          id: w.id,
-          amountMl: w.amount_ml,
-          time: new Date(w.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        })));
-      } else {
+        if (waterData && waterData.length > 0) {
+          const totalMl = waterData.reduce((acc, curr) => acc + (curr.amount_ml || 0), 0);
+          setWaterL(parseFloat((totalMl / 1000).toFixed(2)));
+          setWaterLogs(waterData.map(w => ({
+            id: w.id,
+            amountMl: w.amount_ml,
+            time: new Date(w.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          })));
+        } else {
+          setWaterL(0);
+          setWaterLogs([]);
+        }
+      } catch (waterErr) {
         setWaterL(0);
         setWaterLogs([]);
       }
 
       // 5. Fetch Meal Logs for today
-      const { data: mealData } = await supabase.from('meal_logs')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', todayIso)
-        .order('created_at', { ascending: false });
+      try {
+        const { data: mealData } = await supabase.from('meal_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('created_at', todayIso)
+          .order('created_at', { ascending: false });
 
-      if (mealData && mealData.length > 0) {
-        setMeals(mealData.map(m => ({
-          id: m.id,
-          name: m.name,
-          calories: m.calories_kcal,
-          carbs: m.carbs_g || 0,
-          protein: m.protein_g || 0,
-          fats: m.fats_g || 0,
-          mealType: m.meal_type || 'Snack',
-          time: new Date(m.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        })));
-      } else {
+        if (mealData && mealData.length > 0) {
+          setMeals(mealData.map(m => ({
+            id: m.id,
+            name: m.name,
+            calories: m.calories_kcal,
+            carbs: m.carbs_g || 0,
+            protein: m.protein_g || 0,
+            fats: m.fats_g || 0,
+            mealType: m.meal_type || 'Snack',
+            time: new Date(m.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          })));
+        } else {
+          setMeals([]);
+        }
+      } catch (mealErr) {
         setMeals([]);
       }
 
       // 6. Fetch Medication Reminders / Tablets
-      const { data: medData } = await supabase.from('medication_reminders')
-        .select('*')
-        .eq('user_id', user.id);
+      try {
+        const { data: medData } = await supabase.from('medication_reminders')
+          .select('*')
+          .eq('user_id', user.id);
 
-      if (medData && medData.length > 0) {
-        setTablets(medData.map(med => ({
-          id: med.id,
-          name: med.name,
-          dosage: med.dosage,
-          time: med.scheduled_time,
-          category: 'Daily Care',
-          isTaken: med.is_taken || false
-        })));
-      } else {
+        if (medData && medData.length > 0) {
+          setTablets(medData.map(med => ({
+            id: med.id,
+            name: med.name,
+            dosage: med.dosage,
+            time: med.scheduled_time,
+            category: 'Daily Care',
+            isTaken: med.is_taken || false
+          })));
+        } else {
+          setTablets([]);
+        }
+      } catch (medErr) {
         setTablets([]);
       }
 
       // 7. Fetch Pomodoro Sessions completed today
-      const { data: pomoData } = await supabase.from('pomodoro_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', todayIso);
+      try {
+        const { data: pomoData } = await supabase.from('pomodoro_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('created_at', todayIso);
 
-      setPomoSessions(pomoData?.length || 0);
+        setPomoSessions(pomoData?.length || 0);
+      } catch (pomoErr) {
+        setPomoSessions(0);
+      }
 
       const now = new Date();
       setLastSyncTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));

@@ -32,23 +32,29 @@ export function ProfileScreen({
   onSignOut: () => void;
   onOpenSignIn: () => void;
 }) {
+  const safeName = displayName || (currentUser?.email ? currentUser.email.split('@')[0] : 'Member');
+  const initial = (safeName.trim().charAt(0) || 'M').toUpperCase();
+  const stepGoal = goals?.dailySteps || 10000;
+  const waterGoal = goals?.dailyWaterL || 2.5;
+  const calorieGoal = goals?.dailyCalories || 2400;
+
   return (
     <div className="space-y-5 animate-fade-in pt-1 pb-4">
       {/* Profile Card */}
       <div className="bg-white rounded-[36px] p-6 shadow-xs border border-slate-100/90 flex items-center gap-4">
         <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#A7F3D0] via-[#BAE6FD] to-[#DDD6FE] p-0.5 shadow-xs overflow-hidden flex-shrink-0">
           {avatarUrl ? (
-            <img src={avatarUrl} alt={displayName} className="w-full h-full rounded-full object-cover" />
+            <img src={avatarUrl} alt={safeName} className="w-full h-full rounded-full object-cover" />
           ) : (
             <div className="w-full h-full rounded-full bg-[#FB923C] flex items-center justify-center text-white font-black text-xl shadow-inner">
-              {displayName.charAt(0).toUpperCase()}
+              {initial}
             </div>
           )}
         </div>
 
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-lg font-black text-slate-800 leading-tight">{displayName}</h3>
+            <h3 className="text-lg font-black text-slate-800 leading-tight">{safeName}</h3>
             {currentUser && (
               <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-[#D7F4DF] text-[#15803D]">
                 CLOUD
@@ -83,19 +89,19 @@ export function ProfileScreen({
           <div className="p-3 rounded-2xl bg-[#F2FAF4] border border-[#CDEED5] text-center">
             <Footprints className="w-4 h-4 text-[#16A34A] mx-auto mb-1" />
             <span className="text-[9px] font-bold text-slate-400 uppercase">Steps</span>
-            <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{goals.dailySteps.toLocaleString()}</p>
+            <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{stepGoal.toLocaleString()}</p>
           </div>
 
           <div className="p-3 rounded-2xl bg-[#F3F9FD] border border-[#DAEFFB] text-center">
             <Droplets className="w-4 h-4 text-[#0284C7] mx-auto mb-1 fill-[#38BDF8]" />
             <span className="text-[9px] font-bold text-slate-400 uppercase">Water</span>
-            <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{goals.dailyWaterL} L</p>
+            <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{waterGoal} L</p>
           </div>
 
           <div className="p-3 rounded-2xl bg-[#FFF8F3] border border-[#FEDDC7] text-center">
             <Flame className="w-4 h-4 text-[#EA580C] mx-auto mb-1 fill-[#FB923C]" />
             <span className="text-[9px] font-bold text-slate-400 uppercase">Calories</span>
-            <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{goals.dailyCalories}</p>
+            <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{calorieGoal}</p>
           </div>
         </div>
       </div>
