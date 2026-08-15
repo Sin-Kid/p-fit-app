@@ -904,9 +904,12 @@ export default function PFitApp() {
         onSelectAction={(action) => {
           if (action === 'water') setIsAddWaterOpen(true);
           if (action === 'meal') setIsAddMealOpen(true);
+          if (action === 'calculator') setIsCalorieCalcOpen(true);
+          if (action === 'steps') setActiveTab('steps');
           if (action === 'workout') setIsWorkoutModalOpen(true);
           if (action === 'tablets') setIsAddTabletOpen(true);
           if (action === 'pomodoro') setActiveTab('pomodoro');
+          if (action === 'goal') setIsAddGoalOpen(true);
         }}
       />
 
