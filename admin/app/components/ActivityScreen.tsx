@@ -37,16 +37,23 @@ export function ActivityScreen({
     if (filter === 'Day') {
       // Hourly breakdown of today's steps
       const hours = ['06:00', '09:00', '12:00', '15:00', '18:00', '21:00'];
-      const distribution = [0.08, 0.22, 0.28, 0.20, 0.16, 0.06];
+      const currentHour = new Date().getHours();
+      let currentPeriodIdx = 0;
+      if (currentHour >= 9) currentPeriodIdx = 1;
+      if (currentHour >= 12) currentPeriodIdx = 2;
+      if (currentHour >= 15) currentPeriodIdx = 3;
+      if (currentHour >= 18) currentPeriodIdx = 4;
+      if (currentHour >= 21) currentPeriodIdx = 5;
+
       return hours.map((hour, idx) => {
-        const estSteps = Math.round(steps * distribution[idx]);
-        const peakHourMax = Math.max(1, Math.round(steps * 0.35));
-        const heightPct = Math.min(100, Math.max(10, Math.round((estSteps / peakHourMax) * 100)));
+        const estSteps = idx === currentPeriodIdx ? steps : 0;
+        const peakHourMax = Math.max(1, stepGoal * 0.35);
+        const heightPct = Math.min(100, Math.max(12, Math.round((estSteps / peakHourMax) * 100)));
         return {
           label: hour,
           value: estSteps,
           heightPct,
-          isCurrent: idx === 4 // active afternoon/evening
+          isCurrent: idx === currentPeriodIdx
         };
       });
     }
@@ -54,11 +61,10 @@ export function ActivityScreen({
     if (filter === 'Week') {
       // 7-day week breakdown Mon-Sun with today's real step count
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const pastRatios = [0.85, 0.95, 0.78, 1.05, 0.92, 1.15, 0.90];
 
       return days.map((day, idx) => {
         const isToday = idx === currentDayIndex;
-        const daySteps = isToday ? steps : Math.round(stepGoal * pastRatios[idx]);
+        const daySteps = isToday ? steps : 0;
         const heightPct = Math.min(100, Math.max(12, Math.round((daySteps / (stepGoal * 1.2)) * 100)));
         return {
           label: day,
@@ -72,36 +78,41 @@ export function ActivityScreen({
     if (filter === 'Month') {
       // 4-Week breakdown of the current month
       const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-      const weekAverages = [
-        Math.round(stepGoal * 0.92 * 7),
-        Math.round(stepGoal * 1.04 * 7),
-        Math.round(stepGoal * 0.88 * 7),
-        Math.round((steps * 4) + (stepGoal * 3))
-      ];
-      const maxWeek = Math.max(...weekAverages);
-      return weeks.map((w, idx) => ({
-        label: w,
-        value: weekAverages[idx],
-        heightPct: Math.min(100, Math.max(15, Math.round((weekAverages[idx] / maxWeek) * 100))),
-        isCurrent: idx === 3
-      }));
+      const currentWeekNum = Math.floor(new Date().getDate() / 7);
+      const activeWeekIdx = Math.min(3, currentWeekNum);
+
+      return weeks.map((w, idx) => {
+        const isCurrent = idx === activeWeekIdx;
+        const weekSteps = isCurrent ? steps : 0;
+        const maxWeek = Math.max(1, stepGoal * 7);
+        return {
+          label: w,
+          value: weekSteps,
+          heightPct: Math.min(100, Math.max(12, Math.round((weekSteps / maxWeek) * 100))),
+          isCurrent
+        };
+      });
     }
 
     // Year breakdown (Q1 to Q4)
     const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
-    const quarterTotals = [
-      Math.round(stepGoal * 82),
-      Math.round(stepGoal * 91),
-      Math.round(stepGoal * 88),
-      Math.round(stepGoal * 75 + steps * 10)
-    ];
-    const maxQ = Math.max(...quarterTotals);
-    return quarters.map((q, idx) => ({
-      label: q,
-      value: quarterTotals[idx],
-      heightPct: Math.min(100, Math.max(15, Math.round((quarterTotals[idx] / maxQ) * 100))),
-      isCurrent: idx === 3
-    }));
+    const currentMonth = new Date().getMonth();
+    let currentQuarterIdx = 0;
+    if (currentMonth >= 3) currentQuarterIdx = 1;
+    if (currentMonth >= 6) currentQuarterIdx = 2;
+    if (currentMonth >= 9) currentQuarterIdx = 3;
+
+    return quarters.map((q, idx) => {
+      const isCurrent = idx === currentQuarterIdx;
+      const quarterSteps = isCurrent ? steps : 0;
+      const maxQ = Math.max(1, stepGoal * 90);
+      return {
+        label: q,
+        value: quarterSteps,
+        heightPct: Math.min(100, Math.max(12, Math.round((quarterSteps / maxQ) * 100))),
+        isCurrent
+      };
+    });
   }, [filter, steps, stepGoal, currentDayIndex]);
 
   // Aggregate metrics computed from real active data
