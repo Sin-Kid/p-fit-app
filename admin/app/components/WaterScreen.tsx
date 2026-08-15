@@ -21,11 +21,13 @@ export function WaterScreen({
   onOpenCustomModal: () => void;
   onDeleteLog: (id: string) => void;
 }) {
-  const percentage = Math.min(100, Math.round((waterL / goalL) * 100));
-  const remainingL = Math.max(0, parseFloat((goalL - waterL).toFixed(2)));
+  const safeWater = waterL || 0;
+  const safeGoal = goalL || 2.5;
+  const percentage = safeGoal > 0 ? Math.min(100, Math.round((safeWater / safeGoal) * 100)) : 0;
+  const remainingL = Math.max(0, parseFloat((safeGoal - safeWater).toFixed(2)));
 
   const totalGlasses = 8;
-  const filledGlasses = Math.min(totalGlasses, Math.floor((waterL / goalL) * totalGlasses));
+  const filledGlasses = safeGoal > 0 ? Math.min(totalGlasses, Math.floor((safeWater / safeGoal) * totalGlasses)) : 0;
 
   return (
     <div className="space-y-5 animate-fade-in pt-1 pb-4">
@@ -50,10 +52,10 @@ export function WaterScreen({
         <div className="w-full flex items-baseline justify-between">
           <div>
             <h3 className="text-5xl font-black text-slate-800 tracking-tight font-mono">
-              {waterL.toFixed(1)} <span className="text-xl font-bold font-sans text-slate-400">L</span>
+              {safeWater.toFixed(1)} <span className="text-xl font-bold font-sans text-slate-400">L</span>
             </h3>
             <p className="text-xs font-bold text-slate-500 mt-0.5">
-              Target: {goalL.toFixed(1)} L ({percentage}%)
+              Target: {safeGoal.toFixed(1)} L ({percentage}%)
             </p>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${

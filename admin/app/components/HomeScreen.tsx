@@ -88,7 +88,7 @@ export function HomeScreen({
               <div>
                 <p className="text-[10px] font-extrabold text-slate-500 uppercase">Calories</p>
                 <p className="text-xs font-black text-slate-800">
-                  {calories.toLocaleString()} <span className="text-[10px] text-slate-400 font-medium">/ {goals.dailyCalories.toLocaleString()} kcal</span>
+                  {(calories || 0).toLocaleString()} <span className="text-[10px] text-slate-400 font-medium">/ {calorieGoal.toLocaleString()} kcal</span>
                 </p>
               </div>
             </div>
@@ -106,7 +106,7 @@ export function HomeScreen({
               <div>
                 <p className="text-[10px] font-extrabold text-slate-500 uppercase">Steps</p>
                 <p className="text-xs font-black text-slate-800">
-                  {steps.toLocaleString()} <span className="text-[10px] text-slate-400 font-medium">/ {goals.dailySteps.toLocaleString()}</span>
+                  {(steps || 0).toLocaleString()} <span className="text-[10px] text-slate-400 font-medium">/ {stepGoal.toLocaleString()}</span>
                 </p>
               </div>
             </div>
@@ -124,7 +124,7 @@ export function HomeScreen({
               <div>
                 <p className="text-[10px] font-extrabold text-slate-500 uppercase">Hydration</p>
                 <p className="text-xs font-black text-slate-800">
-                  {waterL.toFixed(1)} <span className="text-[10px] text-slate-400 font-medium">/ {goals.dailyWaterL.toFixed(1)} L</span>
+                  {(waterL || 0).toFixed(1)} <span className="text-[10px] text-slate-400 font-medium">/ {waterGoal.toFixed(1)} L</span>
                 </p>
               </div>
             </div>

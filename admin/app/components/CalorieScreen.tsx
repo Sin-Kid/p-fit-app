@@ -19,12 +19,16 @@ export function CalorieScreen({
   onOpenCalculatorModal: () => void;
   onDeleteMeal: (id: string) => void;
 }) {
-  const totalCarbs = meals.reduce((acc, m) => acc + (m.carbs || 0), 0);
-  const totalProtein = meals.reduce((acc, m) => acc + (m.protein || 0), 0);
-  const totalFats = meals.reduce((acc, m) => acc + (m.fats || 0), 0);
+  const safeMeals = meals || [];
+  const safeCalories = totalCalories || 0;
+  const safeGoal = calorieGoal || 2400;
 
-  const percentage = Math.min(100, Math.round((totalCalories / calorieGoal) * 100));
-  const remainingKcal = Math.max(0, calorieGoal - totalCalories);
+  const totalCarbs = safeMeals.reduce((acc, m) => acc + (m.carbs || 0), 0);
+  const totalProtein = safeMeals.reduce((acc, m) => acc + (m.protein || 0), 0);
+  const totalFats = safeMeals.reduce((acc, m) => acc + (m.fats || 0), 0);
+
+  const percentage = safeGoal > 0 ? Math.min(100, Math.round((safeCalories / safeGoal) * 100)) : 0;
+  const remainingKcal = Math.max(0, safeGoal - safeCalories);
 
   return (
     <div className="space-y-5 animate-fade-in pt-1 pb-4">
@@ -53,10 +57,10 @@ export function CalorieScreen({
         <div className="w-full flex items-baseline justify-between">
           <div>
             <h3 className="text-5xl font-black text-slate-800 tracking-tight font-mono">
-              {totalCalories.toLocaleString()}
+              {safeCalories.toLocaleString()}
             </h3>
             <p className="text-xs font-bold text-slate-500 mt-0.5">
-              of {calorieGoal.toLocaleString()} kcal goal ({percentage}%)
+              of {safeGoal.toLocaleString()} kcal goal ({percentage}%)
             </p>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${
