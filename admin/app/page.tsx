@@ -111,7 +111,7 @@ export default function PFitApp() {
 
   // Modals Visibility State
   const [isQuickActionOpen, setIsQuickActionOpen] = useState<boolean>(false);
-  const [isAddWaterOpen, setIsAddWaterOpen] = useState<boolean>(false);
+
   const [isAddMealOpen, setIsAddMealOpen] = useState<boolean>(false);
   const [isCalorieCalcOpen, setIsCalorieCalcOpen] = useState<boolean>(false);
   const [isWorkoutModalOpen, setIsWorkoutModalOpen] = useState<boolean>(false);
@@ -783,7 +783,7 @@ export default function PFitApp() {
             onNavigateTab={(tab) => setActiveTab(tab)}
             onStartWorkout={() => setIsWorkoutModalOpen(true)}
             onAddMeal={() => setIsAddMealOpen(true)}
-            onAddWater={() => setIsAddWaterOpen(true)}
+            onAddWater={() => setActiveTab('water')}
             onToggleTabletTaken={handleToggleTabletTaken}
           />
         )}
@@ -795,7 +795,7 @@ export default function PFitApp() {
             logs={waterLogs}
             onAddWater={handleAddWater}
             onDeleteLog={handleDeleteWaterLog}
-            onOpenCustomModal={() => setIsAddWaterOpen(true)}
+
           />
         )}
 
@@ -902,7 +902,7 @@ export default function PFitApp() {
         isOpen={isQuickActionOpen}
         onClose={() => setIsQuickActionOpen(false)}
         onSelectAction={(action) => {
-          if (action === 'water') setIsAddWaterOpen(true);
+          if (action === 'water') setActiveTab('water');
           if (action === 'meal') setIsAddMealOpen(true);
           if (action === 'calculator') setIsCalorieCalcOpen(true);
           if (action === 'steps') setActiveTab('steps');
@@ -913,11 +913,7 @@ export default function PFitApp() {
         }}
       />
 
-      <AddWaterModal
-        isOpen={isAddWaterOpen}
-        onClose={() => setIsAddWaterOpen(false)}
-        onAddWater={handleAddWater}
-      />
+
 
       <AddMealModal
         isOpen={isAddMealOpen}

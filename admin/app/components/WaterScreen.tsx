@@ -11,14 +11,12 @@ export function WaterScreen({
   goalL,
   logs,
   onAddWater,
-  onOpenCustomModal,
   onDeleteLog
 }: {
   waterL: number;
   goalL: number;
   logs: WaterLogItem[];
   onAddWater: (ml: number) => void;
-  onOpenCustomModal: () => void;
   onDeleteLog: (id: string) => void;
 }) {
   const [sliderValue, setSliderValue] = useState<number>(300);
