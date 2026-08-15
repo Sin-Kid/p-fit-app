@@ -1,0 +1,12 @@
+{
+  "appId": "com.pfit.app",
+  "appName": "P-fit",
+  "webDir": "out",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
