@@ -44,7 +44,13 @@ export function HomeScreen({
   const calorieRatio = calorieGoal > 0 ? Math.min(1, (calories || 0) / calorieGoal) : 0;
   const overallProgress = Math.min(100, Math.round(((stepRatio * 0.4) + (waterRatio * 0.3) + (calorieRatio * 0.3)) * 100)) || 0;
 
-  const activeWorkout = (workouts || []).find(w => !w.isCompleted) || (workouts || [])[0];
+  const activeWorkout = (workouts || []).find(w => !w.isCompleted) || (workouts || [])[0] || {
+    title: 'No workout scheduled',
+    isCompleted: false,
+    exercisesCount: 0,
+    durationMinutes: 0,
+    caloriesBurned: 0
+  };
 
   return (
     <div className="space-y-5 animate-fade-in pb-4">
