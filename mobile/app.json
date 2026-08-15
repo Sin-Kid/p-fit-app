@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "P-Fit Tracker",
+    "slug": "pfit-step-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.pfit.fitnesssteptracker",
+      "infoPlist": {
+        "NSMotionUsageDescription": "Allow P-Fit to access device motion and pedometer sensor to accurately count your daily steps in background and foreground.",
+        "UIBackgroundModes": [
+          "fetch",
+          "processing"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.pfit.fitnesssteptracker",
+      "permissions": [
+        "ACTIVITY_RECOGNITION",
+        "RECEIVE_BOOT_COMPLETED",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.WAKE_LOCK"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Allow P-Fit to access device motion and pedometer sensor to accurately count your daily steps."
+        }
+      ],
+      "expo-task-manager",
+      [
+        "expo-background-fetch",
+        {}
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6c819207-c827-424b-927f-6db0da231e33"
+      }
+    }
+  }
+}
