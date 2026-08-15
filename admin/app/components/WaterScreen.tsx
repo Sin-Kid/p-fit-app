@@ -71,54 +71,7 @@ export function WaterScreen({
           <AnimatedWaterBottle waterL={waterL} goalL={goalL} className="w-full h-full" />
         </div>
 
-        {/* 8-Glass Visual Indicator Row (Soft Pastel Glasses) */}
-        <div className="flex justify-center gap-2 mt-4 w-full px-2">
-          {Array.from({ length: totalGlasses }).map((_, i) => {
-            const isFilled = i < filledGlasses;
-            return (
-              <div 
-                key={i} 
-                className={`flex-1 h-9 rounded-b-xl border-2 transition-all relative overflow-hidden ${
-                  isFilled ? 'border-[#93C5FD] bg-[#BFDBFE] shadow-xs' : 'border-[#E2E8F0] bg-white'
-                }`}
-                title={`Glass ${i + 1} (~${Math.round((goalL * 1000) / totalGlasses)}ml)`}
-              >
-                {isFilled && (
-                  <div className="absolute inset-0 bg-[#60A5FA] opacity-90 animate-fade-in flex items-center justify-center text-white">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
 
-        {/* Quick Log Presets */}
-        <div className="grid grid-cols-3 gap-2 w-full mt-5">
-          <button
-            onClick={() => onAddWater(150)}
-            className="py-3 px-2 rounded-2xl bg-white hover:bg-[#E0F2FE] border border-[#BAE6FD] flex flex-col items-center justify-center active:scale-95 transition-all shadow-xs"
-          >
-            <span className="text-xs font-black text-[#0284C7] font-mono">+150ml</span>
-            <span className="text-[10px] text-slate-400 font-medium">Glass</span>
-          </button>
-
-          <button
-            onClick={() => onAddWater(250)}
-            className="py-3 px-2 rounded-2xl bg-[#38BDF8] hover:bg-[#0EA5E9] text-white shadow-md shadow-sky-400/20 flex flex-col items-center justify-center active:scale-95 transition-all"
-          >
-            <span className="text-xs font-black font-mono">+250ml</span>
-            <span className="text-[10px] text-sky-100 font-medium">Mug</span>
-          </button>
-
-          <button
-            onClick={() => onAddWater(500)}
-            className="py-3 px-2 rounded-2xl bg-white hover:bg-[#E0F2FE] border border-[#BAE6FD] flex flex-col items-center justify-center active:scale-95 transition-all shadow-xs"
-          >
-            <span className="text-xs font-black text-[#0284C7] font-mono">+500ml</span>
-            <span className="text-[10px] text-slate-400 font-medium">Bottle</span>
-          </button>
-        </div>
 
         {/* Interactive Custom Slider */}
         <div className="w-full mt-4 p-4 rounded-3xl bg-white border border-[#BAE6FD] shadow-xs">
