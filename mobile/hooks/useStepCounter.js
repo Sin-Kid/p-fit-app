@@ -196,68 +196,81 @@ export function useStepCounter() {
   }, []);
 
   /**
-   * Reconcile Steps with Hardware Storage Baseline
+   * Reconcile Steps with Storage Baseline
    */
   const reconcileSteps = useCallback(async (forcedFullDay = false) => {
     try {
       const now = new Date();
       const todayStr = getTodayDateString();
 
-      const [savedDate, savedStepsStr, savedTimestampStr] = await Promise.all([
+      const [savedDate, savedStepsStr] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.SAVED_DATE),
         AsyncStorage.getItem(STORAGE_KEYS.PERSISTED_STEPS),
-        AsyncStorage.getItem(STORAGE_KEYS.LAST_TIMESTAMP),
       ]);
 
-      const storedSteps = savedStepsStr ? parseInt(savedStepsStr, 10) : 0;
-      const lastTimestamp = savedTimestampStr ? parseInt(savedTimestampStr, 10) : now.getTime();
-
-      let newPersistedTotal = storedSteps;
+      let storedSteps = savedStepsStr ? parseInt(savedStepsStr, 10) : 0;
+      if (isNaN(storedSteps)) storedSteps = 0;
 
       // 1. Midnight day rollover
       if (savedDate !== todayStr || forcedFullDay) {
-        const startOfToday = getStartOfToday();
-        try {
-          const stepResult = await Pedometer.getStepCountAsync(startOfToday, now);
-          newPersistedTotal = stepResult && typeof stepResult.steps === 'number' ? stepResult.steps : 0;
-        } catch (queryErr) {
-          newPersistedTotal = 0;
-        }
+        let newDaySteps = 0;
 
-        await Promise.all([
-          AsyncStorage.setItem(STORAGE_KEYS.SAVED_DATE, todayStr),
-          AsyncStorage.setItem(STORAGE_KEYS.PERSISTED_STEPS, newPersistedTotal.toString()),
-          AsyncStorage.setItem(STORAGE_KEYS.LAST_TIMESTAMP, now.getTime().toString()),
-        ]);
-      } else {
-        // 2. Same-day gap recovery
-        const gapStart = new Date(Math.max(getStartOfToday().getTime(), lastTimestamp));
-        
-        if (now.getTime() - gapStart.getTime() > 1000) {
+        // iOS supports historical range queries via CoreMotion
+        if (Platform.OS === 'ios') {
           try {
-            const stepResult = await Pedometer.getStepCountAsync(gapStart, now);
-            const gapSteps = stepResult && typeof stepResult.steps === 'number' ? stepResult.steps : 0;
-            newPersistedTotal = storedSteps + gapSteps;
-          } catch (queryErr) {
-            // Keep existing stored steps
+            const startOfToday = getStartOfToday();
+            const stepResult = await Pedometer.getStepCountAsync(startOfToday, now);
+            if (stepResult && typeof stepResult.steps === 'number') {
+              newDaySteps = stepResult.steps;
+            }
+          } catch (e) {
+            newDaySteps = 0;
           }
         }
 
         await Promise.all([
-          AsyncStorage.setItem(STORAGE_KEYS.PERSISTED_STEPS, newPersistedTotal.toString()),
+          AsyncStorage.setItem(STORAGE_KEYS.SAVED_DATE, todayStr),
+          AsyncStorage.setItem(STORAGE_KEYS.PERSISTED_STEPS, newDaySteps.toString()),
           AsyncStorage.setItem(STORAGE_KEYS.LAST_TIMESTAMP, now.getTime().toString()),
         ]);
+
+        setPersistedTotal(newDaySteps);
+        persistedTotalRef.current = newDaySteps;
+      } else {
+        // Same day: preserve existing steps and query iOS gap if on iOS
+        let updatedTotal = storedSteps;
+
+        if (Platform.OS === 'ios') {
+          try {
+            const lastTsStr = await AsyncStorage.getItem(STORAGE_KEYS.LAST_TIMESTAMP);
+            const lastTs = lastTsStr ? parseInt(lastTsStr, 10) : now.getTime();
+            const gapStart = new Date(Math.max(getStartOfToday().getTime(), lastTs));
+            if (now.getTime() - gapStart.getTime() > 2000) {
+              const stepResult = await Pedometer.getStepCountAsync(gapStart, now);
+              if (stepResult && typeof stepResult.steps === 'number') {
+                updatedTotal += stepResult.steps;
+              }
+            }
+          } catch (e) {
+            // Keep storedSteps
+          }
+        }
+
+        await Promise.all([
+          AsyncStorage.setItem(STORAGE_KEYS.PERSISTED_STEPS, updatedTotal.toString()),
+          AsyncStorage.setItem(STORAGE_KEYS.LAST_TIMESTAMP, now.getTime().toString()),
+        ]);
+
+        setPersistedTotal(updatedTotal);
+        persistedTotalRef.current = updatedTotal;
       }
 
-      setPersistedTotal(newPersistedTotal);
-      persistedTotalRef.current = newPersistedTotal;
       lastTimestampRef.current = now.getTime();
-
       startLiveWatcher();
-      return newPersistedTotal;
+      return persistedTotalRef.current;
     } catch (err) {
       console.warn('[useStepCounter] Reconcile error:', err);
-      setError('Reconciliation error: ' + err.message);
+      startLiveWatcher();
       return persistedTotalRef.current;
     }
   }, [startLiveWatcher]);
