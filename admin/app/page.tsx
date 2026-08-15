@@ -49,10 +49,6 @@ export default function PFitApp() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
   // Health Metrics State (Strict 0 baseline for new users)
   const [steps, setSteps] = useState<number>(0);
   const [waterL, setWaterL] = useState<number>(0);
@@ -68,6 +64,164 @@ export default function PFitApp() {
 
   const [customGoals, setCustomGoals] = useState<GoalItem[]>([]);
   const [workouts, setWorkouts] = useState<WorkoutItem[]>([]);
+
+  // Pomodoro State
+  const [pomoMode, setPomoMode] = useState<'focus' | 'shortBreak' | 'longBreak'>('focus');
+  const [pomoSeconds, setPomoSeconds] = useState<number>(25 * 60);
+  const [pomoTotal, setPomoTotal] = useState<number>(25 * 60);
+  const [pomoRunning, setPomoRunning] = useState<boolean>(false);
+  const [pomoSessions, setPomoSessions] = useState<number>(0);
+  const [pomoTasks, setPomoTasks] = useState<PomodoroTask[]>([]);
+
+  // Notifications State
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  // Tablets & Medication State (Clean 0 array for new users)
+  const [tablets, setTablets] = useState<TabletItem[]>([]);
+
+  // Cloud Sync State
+  const [lastSyncTime, setLastSyncTime] = useState<string>('Just now');
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  // Modals Visibility State
+  const [isQuickActionOpen, setIsQuickActionOpen] = useState<boolean>(false);
+  const [isAddMealOpen, setIsAddMealOpen] = useState<boolean>(false);
+  const [isCalorieCalcOpen, setIsCalorieCalcOpen] = useState<boolean>(false);
+  const [isWorkoutModalOpen, setIsWorkoutModalOpen] = useState<boolean>(false);
+  const [isPomodoroTasksOpen, setIsPomodoroTasksOpen] = useState<boolean>(false);
+  const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState<boolean>(false);
+  const [isAddGoalOpen, setIsAddGoalOpen] = useState<boolean>(false);
+  const [isEditTargetsOpen, setIsEditTargetsOpen] = useState<boolean>(false);
+  const [isAddTabletOpen, setIsAddTabletOpen] = useState<boolean>(false);
+
+  // Global Date Helper for Day Boundary Persistence
+  const getTodayIsoDate = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  // 1. Initial State Hydration from LocalStorage on Client Mount
+  useEffect(() => {
+    setIsMounted(true);
+    try {
+      // Restore Guest Session
+      const savedGuest = localStorage.getItem('pfit_is_guest');
+      if (savedGuest === 'true') {
+        setIsGuest(true);
+      }
+
+      // Restore Active Tab
+      const savedTab = localStorage.getItem('pfit_active_tab') as any;
+      if (savedTab && ['home', 'activity', 'progress', 'profile', 'water', 'calories', 'steps', 'pomodoro', 'tablets'].includes(savedTab)) {
+        setActiveTab(savedTab);
+      }
+
+      // Restore User Core Goals
+      const savedGoals = localStorage.getItem('pfit_user_goals');
+      if (savedGoals) {
+        try { setUserGoals(JSON.parse(savedGoals)); } catch (e) {}
+      }
+
+      // Restore Custom Goals
+      const savedCustomGoals = localStorage.getItem('pfit_custom_goals');
+      if (savedCustomGoals) {
+        try { setCustomGoals(JSON.parse(savedCustomGoals)); } catch (e) {}
+      }
+
+      // Restore Tablets / Medication list
+      const savedTablets = localStorage.getItem('pfit_tablets');
+      if (savedTablets) {
+        try { setTablets(JSON.parse(savedTablets)); } catch (e) {}
+      }
+
+      // Check Midnight Day Boundary for Daily Metrics
+      const todayStr = getTodayIsoDate();
+      const savedDate = localStorage.getItem('pfit_saved_date');
+
+      if (savedDate === todayStr) {
+        // Same day: Restore daily metrics
+        const savedSteps = localStorage.getItem('pfit_steps');
+        if (savedSteps) setSteps(parseInt(savedSteps, 10) || 0);
+
+        const savedWaterL = localStorage.getItem('pfit_water_l');
+        if (savedWaterL) setWaterL(parseFloat(savedWaterL) || 0);
+
+        const savedWaterLogs = localStorage.getItem('pfit_water_logs');
+        if (savedWaterLogs) {
+          try { setWaterLogs(JSON.parse(savedWaterLogs)); } catch (e) {}
+        }
+
+        const savedMeals = localStorage.getItem('pfit_meals');
+        if (savedMeals) {
+          try { setMeals(JSON.parse(savedMeals)); } catch (e) {}
+        }
+
+        const savedWorkouts = localStorage.getItem('pfit_workouts');
+        if (savedWorkouts) {
+          try { setWorkouts(JSON.parse(savedWorkouts)); } catch (e) {}
+        }
+
+        const savedPomo = localStorage.getItem('pfit_pomo_sessions');
+        if (savedPomo) setPomoSessions(parseInt(savedPomo, 10) || 0);
+      } else {
+        // New day rollover: Reset daily metrics, reset daily tablet checkboxes, update saved date
+        localStorage.setItem('pfit_saved_date', todayStr);
+        localStorage.setItem('pfit_steps', '0');
+        localStorage.setItem('pfit_water_l', '0');
+        localStorage.setItem('pfit_water_logs', JSON.stringify([]));
+        localStorage.setItem('pfit_meals', JSON.stringify([]));
+        localStorage.setItem('pfit_workouts', JSON.stringify([]));
+        localStorage.setItem('pfit_pomo_sessions', '0');
+
+        setSteps(0);
+        setWaterL(0);
+        setWaterLogs([]);
+        setMeals([]);
+        setWorkouts([]);
+        setPomoSessions(0);
+
+        // Reset tablet taken status for the new day
+        setTablets(prev => prev.map(t => ({ ...t, isTaken: false })));
+      }
+    } catch (err) {
+      console.warn('LocalStorage hydration error:', err);
+    }
+  }, []);
+
+  // 2. Continuous Auto-Save to LocalStorage on any state modification
+  useEffect(() => {
+    if (!isMounted) return;
+    try {
+      const todayStr = getTodayIsoDate();
+      localStorage.setItem('pfit_saved_date', todayStr);
+      localStorage.setItem('pfit_is_guest', isGuest ? 'true' : 'false');
+      localStorage.setItem('pfit_active_tab', activeTab);
+      localStorage.setItem('pfit_steps', steps.toString());
+      localStorage.setItem('pfit_water_l', waterL.toString());
+      localStorage.setItem('pfit_water_logs', JSON.stringify(waterLogs));
+      localStorage.setItem('pfit_meals', JSON.stringify(meals));
+      localStorage.setItem('pfit_workouts', JSON.stringify(workouts));
+      localStorage.setItem('pfit_tablets', JSON.stringify(tablets));
+      localStorage.setItem('pfit_user_goals', JSON.stringify(userGoals));
+      localStorage.setItem('pfit_custom_goals', JSON.stringify(customGoals));
+      localStorage.setItem('pfit_pomo_sessions', pomoSessions.toString());
+    } catch (e) {
+      console.warn('LocalStorage auto-save failed:', e);
+    }
+  }, [
+    isMounted,
+    isGuest,
+    activeTab,
+    steps,
+    waterL,
+    waterLogs,
+    meals,
+    workouts,
+    tablets,
+    userGoals,
+    customGoals,
+    pomoSessions
+  ]);
 
   // Handler: Add Steps
   const handleAddSteps = useCallback(async (count: number, showToastAlert: boolean = false) => {
@@ -90,36 +244,6 @@ export default function PFitApp() {
   useMotionPedometer((count) => {
     handleAddSteps(count, false);
   });
-
-  // Pomodoro State
-  const [pomoMode, setPomoMode] = useState<'focus' | 'shortBreak' | 'longBreak'>('focus');
-  const [pomoSeconds, setPomoSeconds] = useState<number>(25 * 60);
-  const [pomoTotal, setPomoTotal] = useState<number>(25 * 60);
-  const [pomoRunning, setPomoRunning] = useState<boolean>(false);
-  const [pomoSessions, setPomoSessions] = useState<number>(0);
-  const [pomoTasks, setPomoTasks] = useState<PomodoroTask[]>([]);
-
-  // Notifications State
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-
-  // Tablets & Medication State (Clean 0 array for new users)
-  const [tablets, setTablets] = useState<TabletItem[]>([]);
-
-  // Cloud Sync State
-  const [lastSyncTime, setLastSyncTime] = useState<string>('Just now');
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-
-  // Modals Visibility State
-  const [isQuickActionOpen, setIsQuickActionOpen] = useState<boolean>(false);
-
-  const [isAddMealOpen, setIsAddMealOpen] = useState<boolean>(false);
-  const [isCalorieCalcOpen, setIsCalorieCalcOpen] = useState<boolean>(false);
-  const [isWorkoutModalOpen, setIsWorkoutModalOpen] = useState<boolean>(false);
-  const [isPomodoroTasksOpen, setIsPomodoroTasksOpen] = useState<boolean>(false);
-  const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState<boolean>(false);
-  const [isAddGoalOpen, setIsAddGoalOpen] = useState<boolean>(false);
-  const [isEditTargetsOpen, setIsEditTargetsOpen] = useState<boolean>(false);
-  const [isAddTabletOpen, setIsAddTabletOpen] = useState<boolean>(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -351,18 +475,6 @@ export default function PFitApp() {
     return () => authListener.subscription.unsubscribe();
   }, [loadUserData]);
 
-  // User-scoped LocalStorage persistence
-  useEffect(() => {
-    if (!currentUser) return;
-    try {
-      const prefix = `pfit_${currentUser.id}`;
-      localStorage.setItem(`${prefix}_steps`, steps.toString());
-      localStorage.setItem(`${prefix}_water_l`, waterL.toString());
-      localStorage.setItem(`${prefix}_user_goals`, JSON.stringify(userGoals));
-      localStorage.setItem(`${prefix}_meals`, JSON.stringify(meals));
-      localStorage.setItem(`${prefix}_tablets`, JSON.stringify(tablets));
-    } catch (e) {}
-  }, [steps, waterL, userGoals, meals, tablets, currentUser]);
 
   // Google Health Connect & Apple HealthKit Auto-Sync Engine
   useEffect(() => {
