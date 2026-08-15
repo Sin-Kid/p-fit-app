@@ -136,6 +136,40 @@ export function ActivityScreen({
     return Math.round(sum / chartData.length);
   }, [chartData, steps]);
 
+  const getSmoothPath = () => {
+    if (chartData.length === 0) return '';
+    const points = chartData.map((d, i) => ({
+      x: (i + 0.5) * (100 / chartData.length),
+      y: 100 - d.heightPct
+    }));
+    
+    let path = `M ${points[0].x},${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i];
+      const p1 = points[i + 1];
+      const cpX = (p0.x + p1.x) / 2;
+      path += ` C ${cpX},${p0.y} ${cpX},${p1.y} ${p1.x},${p1.y}`;
+    }
+    return path;
+  };
+
+  const getAreaPath = () => {
+    if (chartData.length === 0) return '';
+    const points = chartData.map((d, i) => ({
+      x: (i + 0.5) * (100 / chartData.length),
+      y: 100 - d.heightPct
+    }));
+    let path = `M ${points[0].x},${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i];
+      const p1 = points[i + 1];
+      const cpX = (p0.x + p1.x) / 2;
+      path += ` C ${cpX},${p0.y} ${cpX},${p1.y} ${p1.x},${p1.y}`;
+    }
+    path += ` L ${points[points.length - 1].x},100 L ${points[0].x},100 Z`;
+    return path;
+  };
+
   return (
     <div className="space-y-5 animate-fade-in pt-1 pb-4">
       {/* 1. Clean Header without static badges */}
@@ -177,7 +211,7 @@ export function ActivityScreen({
         ))}
       </div>
 
-      {/* 3. Dynamic Bar Chart Summary Card */}
+      {/* 3. Dynamic SVG Line Chart Summary Card */}
       <div className="bg-white rounded-[36px] p-6 shadow-xs border border-slate-100/90 space-y-6">
         <div className="flex items-end justify-between px-1">
           <div>
@@ -197,34 +231,61 @@ export function ActivityScreen({
           </div>
         </div>
 
-        {/* Dynamic Interactive SVG Bar Chart */}
-        <div className="flex items-end justify-between h-44 px-2 pt-4 border-b border-slate-100 pb-3">
-          {chartData.map((item) => (
-            <div key={item.label} className="flex flex-col items-center gap-2 group flex-1">
-              <div className="relative w-full flex justify-center items-end h-32">
-                <span className="absolute -top-7 px-2 py-0.5 rounded-lg bg-slate-800 text-white text-[9px] font-mono font-bold opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-md">
-                  {item.value.toLocaleString()}
-                </span>
-                
-                {/* Dynamic Pastel Bar */}
-                <div 
-                  className={`w-7 rounded-t-xl transition-all duration-500 relative overflow-hidden group-hover:scale-105 ${
-                    item.isCurrent 
-                      ? 'bg-gradient-to-t from-[#34D399] to-[#6EE7B7] shadow-md shadow-emerald-400/20' 
-                      : 'bg-[#D7F4DF] hover:bg-[#BBF7D0]'
-                  }`} 
-                  style={{ height: `${item.heightPct}%` }}
-                >
-                  {item.isCurrent && (
-                    <div className="absolute inset-0 bg-white/25 animate-pulse" />
-                  )}
+        {/* Dynamic Interactive SVG Line Chart */}
+        <div className="relative h-44 px-1 pt-4 border-b border-slate-100 pb-3 flex flex-col justify-between">
+          <div className="relative w-full h-32">
+            <svg 
+              className="absolute inset-0 w-full h-full overflow-visible" 
+              viewBox="0 0 100 100" 
+              preserveAspectRatio="none"
+            >
+              <defs>
+                <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#34D399" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#34D399" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path 
+                d={getAreaPath()} 
+                fill="url(#lineGradient)" 
+              />
+              <path 
+                d={getSmoothPath()} 
+                fill="none" 
+                stroke="#34D399" 
+                strokeWidth="4" 
+                vectorEffect="non-scaling-stroke" 
+                strokeLinecap="round"
+                className="drop-shadow-sm"
+              />
+            </svg>
+
+            {/* Interactive Data Points */}
+            <div className="absolute inset-0 flex items-end justify-between">
+              {chartData.map((item) => (
+                <div key={item.label} className="relative flex flex-col items-center flex-1 h-full group">
+                  <div 
+                    className="absolute w-full flex justify-center items-end"
+                    style={{ bottom: `${item.heightPct}%` }}
+                  >
+                    <span className="absolute -top-7 px-2 py-0.5 rounded-lg bg-slate-800 text-white text-[9px] font-mono font-bold opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-md">
+                      {item.value.toLocaleString()}
+                    </span>
+                    <div className={`w-3 h-3 rounded-full border-2 bg-white transition-all duration-300 transform translate-y-1.5 ${item.isCurrent ? 'border-[#15803D] scale-125 shadow-[0_0_8px_rgba(21,128,61,0.4)]' : 'border-[#34D399] group-hover:scale-125'}`} />
+                  </div>
                 </div>
-              </div>
-              <span className={`text-[10px] font-extrabold ${item.isCurrent ? 'text-[#15803D]' : 'text-slate-400'}`}>
+              ))}
+            </div>
+          </div>
+          
+          {/* X Axis Labels */}
+          <div className="flex items-center justify-between mt-3">
+            {chartData.map((item) => (
+              <span key={item.label} className={`flex-1 text-center text-[10px] font-extrabold ${item.isCurrent ? 'text-[#15803D]' : 'text-slate-400'}`}>
                 {item.label}
               </span>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
