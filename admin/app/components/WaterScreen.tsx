@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Droplets, Plus, Check, Clock, Trash2 } from 'lucide-react';
 import { WaterLogItem } from './types';
 
@@ -21,6 +21,7 @@ export function WaterScreen({
   onOpenCustomModal: () => void;
   onDeleteLog: (id: string) => void;
 }) {
+  const [sliderValue, setSliderValue] = useState<number>(300);
   const safeWater = waterL || 0;
   const safeGoal = goalL || 2.5;
   const percentage = safeGoal > 0 ? Math.min(100, Math.round((safeWater / safeGoal) * 100)) : 0;
@@ -119,13 +120,30 @@ export function WaterScreen({
           </button>
         </div>
 
-        {/* Custom Add Trigger */}
-        <button 
-          onClick={onOpenCustomModal}
-          className="mt-3 w-full py-3 rounded-2xl border-2 border-dashed border-[#BAE6FD] text-[#0284C7] font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#E0F2FE]/50 active:scale-95 transition-all"
-        >
-          <Plus className="w-4 h-4" /> Custom Amount
-        </button>
+        {/* Interactive Custom Slider */}
+        <div className="w-full mt-4 p-4 rounded-3xl bg-white border border-[#BAE6FD] shadow-xs">
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Plus className="w-3 h-3 text-[#0EA5E9]" /> Custom Amount
+            </span>
+            <span className="text-sm font-black text-[#0369A1] font-mono">{sliderValue} ml</span>
+          </div>
+          <input 
+            type="range" 
+            min="10" 
+            max="1500" 
+            step="10"
+            value={sliderValue}
+            onChange={(e) => setSliderValue(Number(e.target.value))}
+            className="w-full h-2 bg-[#E0F2FE] rounded-lg appearance-none cursor-pointer accent-[#0EA5E9]"
+          />
+          <button
+            onClick={() => onAddWater(sliderValue)}
+            className="mt-4 w-full py-2.5 rounded-xl bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-black text-xs active:scale-95 transition-all shadow-md shadow-sky-500/20"
+          >
+            Add {sliderValue} ml
+          </button>
+        </div>
       </div>
 
       {/* Today's Intake History Log */}
